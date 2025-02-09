@@ -3,11 +3,12 @@
 // @namespace    https://github.com/tizee/tempermonkey-zen-mode
 // @version      2025-02-09
 // @description  Hide YouTube home screen for a more zen experience
-// @author       You
+// @author       tizee
 // @match        https://*.youtube.com/*
 // @match        https://*.bilibili.com/*
 // @grant        GM_addStyle
 // @run-at       document-end
+// @license      MIT
 // ==/UserScript==
 
 (function () {
