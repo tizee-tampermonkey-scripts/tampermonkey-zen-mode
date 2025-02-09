@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Zen Mode for Youtube and Bilibili
+// @name         Zen Mode
 // @namespace    https://github.com/tizee/tempermonkey-zen-mode
 // @version      2025-02-09
 // @description  Hide YouTube home screen for a more zen experience
@@ -8,7 +8,6 @@
 // @match        https://*.bilibili.com/*
 // @grant        GM_addStyle
 // @run-at       document-end
-// @license      MIT
 // ==/UserScript==
 
 (function () {
@@ -23,7 +22,7 @@
     }
 
     function YtbZenMode(){
-        hideItemStyle('home screen', 'ytd-two-column-browse-results-renderer');
+        hideItemStyle('home screen', '#contents.ytd-rich-grid-renderer');
         hideItemStyle('video comments', 'ytd-comments');
         hideItemStyle('recommendation video', 'ytd-item-section-renderer.ytd-watch-next-secondary-results-renderer');
     }
@@ -43,7 +42,7 @@
             return B23ZenMode;
         }
     }
-    const debouncedZenMode = GetZenMode();
-    debouncedZenMode();
+    const ZenMode = GetZenMode();
+    ZenMode();
 
 })();
