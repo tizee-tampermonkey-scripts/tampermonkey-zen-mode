@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zen Mode
 // @namespace    https://github.com/tizee/tempermonkey-zen-mode
-// @version      2025-02-09
+// @version      1.1
 // @description  Hide YouTube home screen for a more zen experience
 // @author       tizee
 // @match        https://*.youtube.com/*
@@ -33,6 +33,14 @@
         hideItemStyle('video comments', 'bili-comments');
         hideItemStyle('recommendation video', '.recommend-list-v1');
         hideItemStyle('topic panel', '.topic-panel');
+        hideItemStyle('search bar trending', '.trending');
+        hideItemStyle('header bar', '.bili-header__bar .left-entry');
+        // after placeholder loaded
+        setTimeout(()=>{
+            let input = document.querySelector('.nav-search-input');
+            if (input) input.placeholder = '';
+        }, 1000);
+
     }
 
     function GetZenMode() {
