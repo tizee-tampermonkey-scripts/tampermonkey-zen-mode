@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Zen Mode
 // @namespace    https://github.com/tizee/tempermonkey-zen-mode
-// @version      1.3
+// @version      1.4
 // @description  Hide YouTube home screen for a more zen experience
 // @author       tizee
-// @match        https://*.youtube.com/*
-// @match        https://*.bilibili.com/*
-// @match        https://*.x.com/*
+// @match        *://*.youtube.com/*
+// @match        *://*.bilibili.com/*
+// @match        *://*.x.com/*
 // @grant        GM_addStyle
 // @run-at       document-end
 // @license      MIT
@@ -24,9 +24,10 @@
     }
 
     function YtbZenMode(){
-        hideItemStyle('home screen', '#contents.ytd-rich-grid-renderer');
+        hideItemStyle('home screen', 'ytd-browse[page-subtype="home"]');
         hideItemStyle('video comments', 'ytd-comments');
         hideItemStyle('recommendation video', 'ytd-item-section-renderer.ytd-watch-next-secondary-results-renderer');
+        hideItemStyle('feed chip','ytd-feed-filter-chip-bar-renderer');
     }
 
     function B23ZenMode(){
