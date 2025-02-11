@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zen Mode
 // @namespace    https://github.com/tizee/tempermonkey-zen-mode
-// @version      1.4
+// @version      1.5
 // @description  Hide YouTube home screen for a more zen experience
 // @author       tizee
 // @match        *://*.youtube.com/*
@@ -14,6 +14,19 @@
 
 (function () {
     'use strict';
+    function once(fn) {
+        let hasBeenCalled = false;
+        let result;
+
+        return function(...args) {
+            if (!hasBeenCalled) {
+                result = fn.apply(this, args);
+                hasBeenCalled = true;
+            }
+            return result;
+        };
+    }
+
     function hideItemStyle(tagName, selector) {
         GM_addStyle(`
       ${selector} {
@@ -21,6 +34,43 @@
         }
     `);
         console.debug(`${tagName} is hidden`);
+    }
+
+    function hideViaObserver(selector, attribute, callback) {
+        const el = document.querySelector('');
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.attributeName === attribute ) {
+                    observer.disconnect();
+                    callback(el);
+                    observer.observe(el, config);
+                }
+            });
+        });
+        const config = { attributes: true };
+        if (el) {
+            observer.observe(el, config);
+        }
+    }
+
+    function hideViaRAF(selector, callback) {
+        const el = document.querySelector(selector);
+
+        requestAnimationFrame(() => {
+            if (el) {
+                callback(el);
+            }
+        });
+    }
+
+    function hideViaTimeout(selector, callback, ms) {
+        const el = document.querySelector(selector);
+
+        setTimeout(() => {
+            if (el) {
+                callback(el);
+            }
+        },ms);
     }
 
     function YtbZenMode(){
@@ -38,10 +88,7 @@
         hideItemStyle('search bar trending', '.trending');
         hideItemStyle('header bar', '.bili-header__bar .left-entry');
         // after placeholder loaded
-        setTimeout(()=>{
-            let input = document.querySelector('.nav-search-input');
-            if (input) input.placeholder = '';
-        }, 1000);
+        hideViaTimeout('.nav-search-input', (el) => {el.placeholder = ''; console.debug("hide placeholder");}, 1000);
 
     }
 
@@ -61,7 +108,8 @@
             return XZenMode;
         }
     }
-    const ZenMode = GetZenMode();
+
+    const ZenMode = once(GetZenMode());
     ZenMode();
 
 })();
