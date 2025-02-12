@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zen Mode
 // @namespace    https://github.com/tizee/tempermonkey-zen-mode
-// @version      1.6
+// @version      1.7
 // @description  Hide YouTube home screen for a more zen experience
 // @author       tizee
 // @match        *://*.youtube.com/*
@@ -37,7 +37,7 @@
     }
 
     function hideViaObserver(selector, attribute, callback) {
-        const el = document.querySelector('');
+        const el = document.querySelector(selector);
         const observer = new MutationObserver(function(mutations) {
             mutations.forEach(function(mutation) {
                 if (mutation.attributeName === attribute ) {
@@ -88,7 +88,7 @@
         hideItemStyle('search bar trending', '.trending');
         hideItemStyle('header bar', '.bili-header__bar .left-entry');
         // after placeholder loaded
-        hideViaTimeout('.nav-search-input', (el) => {el.placeholder = ''; console.debug("hide placeholder");}, 1000);
+        hideViaObserver('.nav-search-input', 'placeholder', (el) => {el.placeholder = ''; console.debug("hide placeholder");});
 
     }
 
