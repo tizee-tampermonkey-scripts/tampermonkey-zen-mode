@@ -1,8 +1,9 @@
 // ==UserScript==
 // @name         Zen Mode
 // @namespace    https://github.com/tizee/tempermonkey-zen-mode
-// @version      2.0
+// @version      2.1
 // @description  Hide YouTube home screen for a more zen experience
+// @icon         https://github.com/user-attachments/assets/c69e30bb-84cb-4876-8562-bc8949ede88a
 // @author       tizee
 // @match        *://*.youtube.com/*
 // @match        *://*.bilibili.com/*
