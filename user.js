@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zen Mode
 // @namespace    https://github.com/tizee/tempermonkey-zen-mode
-// @version      2.1.2
+// @version      2.1.3
 // @description  Hide YouTube home screen for a more zen experience
 // @icon         https://github.com/user-attachments/assets/c69e30bb-84cb-4876-8562-bc8949ede88a
 // @author       tizee
@@ -69,6 +69,7 @@
       letter-spacing: 1px;
       opacity: 0.95;
       text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+      margin-left: 1rem;
     }
     #zen-toggle {
       width: 28px;
@@ -79,7 +80,6 @@
       align-items: center;
       justify-content: center;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      margin-left: auto;
       position: relative;
       overflow: hidden;
     }
@@ -98,9 +98,6 @@
     #zen-toggle .zen-icon-inactive {
       opacity: 1;
       transform: scale(1) rotate(0);
-    }
-    #zen-toggle:hover {
-      transform: scale(1.05) !important;
     }
     #zen-toggle:hover svg {
       fill: rgba(255, 255, 255, 1);
