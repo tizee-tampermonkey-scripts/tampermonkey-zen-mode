@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zen Mode
 // @namespace    https://github.com/tizee/tempermonkey-zen-mode
-// @version      2.1.3
+// @version      2.1.4
 // @description  Hide YouTube home screen for a more zen experience
 // @icon         https://github.com/user-attachments/assets/c69e30bb-84cb-4876-8562-bc8949ede88a
 // @author       tizee
@@ -187,8 +187,8 @@
   // X (Twitter) specific zen mode
   function XZenMode() {
     hideItemStyle(
-      "who",
-      'div[aria-label="Trending"] div.css-175oi2r.r-1bro5k0'
+      "live",
+      'div[data-testid="placementTracking"]'
     );
     hideItemStyle(
       "trending region",
