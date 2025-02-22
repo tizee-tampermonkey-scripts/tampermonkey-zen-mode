@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Zen Mode
-// @namespace    https://github.com/tizee/tempermonkey-zen-mode
-// @version      2.1.5
+// @namespace    https://github.com/tizee-tampermonkey-scripts/tampermonkey-zen-mode
+// @version      2.1.6
 // @description  Hide YouTube home screen for a more zen experience
 // @icon         https://github.com/user-attachments/assets/c69e30bb-84cb-4876-8562-bc8949ede88a
 // @author       tizee
-// @downloadURL  https://raw.githubusercontent.com/tizee/tempermonkey-zen-mode/main/user.js
-// @updateURL    https://raw.githubusercontent.com/tizee/tempermonkey-zen-mode/main/user.js
+// @downloadURL  https://raw.githubusercontent.com/tizee-tampermonkey-scripts/tempermonkey-zen-mode/main/user.js
+// @updateURL    https://raw.githubusercontent.com/tizee-tampermonkey-scripts/tempermonkey-zen-mode/main/user.js
 // @match        *://*.youtube.com/*
 // @match        *://*.bilibili.com/*
 // @match        *://*.x.com/*
