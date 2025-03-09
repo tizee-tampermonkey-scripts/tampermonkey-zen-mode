@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zen Mode
 // @namespace    https://github.com/tizee-tampermonkey-scripts/tampermonkey-zen-mode
-// @version      2.1.8
+// @version      2.1.9
 // @description  Hide YouTube home screen for a more zen experience
 // @icon         https://github.com/user-attachments/assets/c69e30bb-84cb-4876-8562-bc8949ede88a
 // @author       tizee
@@ -36,7 +36,6 @@
   GM_addStyle(`
     #zen-container {
       position: fixed;
-      width: 120px;
       height: 48px;
       background: rgba(30, 30, 30, 0.5);
       border-radius: 24px;
