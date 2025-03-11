@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zen Mode
 // @namespace    https://github.com/tizee-tampermonkey-scripts/tampermonkey-zen-mode
-// @version      2.1.9
+// @version      2.1.10
 // @description  Hide YouTube home screen for a more zen experience
 // @icon         https://github.com/user-attachments/assets/c69e30bb-84cb-4876-8562-bc8949ede88a
 // @author       tizee
@@ -177,6 +177,7 @@
     hideItemStyle("trending", ".trending");
     hideItemStyle("ad image", ".ad-img");
     hideItemStyle("header bar", ".bili-header__bar .left-entry");
+    hideItemStyle("ad card", ".adcard");
     hideViaObserver(".nav-search-input", "placeholder", (el) => {
       el.placeholder = "";
       console.debug("Placeholder hidden");
