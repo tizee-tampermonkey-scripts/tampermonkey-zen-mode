@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zen Mode
 // @namespace    https://github.com/tizee-tampermonkey-scripts/tampermonkey-zen-mode
-// @version      2.1.12
+// @version      2.1.13
 // @description  Hide YouTube home screen for a more zen experience
 // @icon         https://github.com/user-attachments/assets/c69e30bb-84cb-4876-8562-bc8949ede88a
 // @author       tizee
@@ -200,6 +200,7 @@
     hideItemStyle("trending tweets", 'div[data-testid="trend" role="link"]');
     hideItemStyle("inline prompt", 'div[data-testid="inlinePrompt"]');
     hideItemStyle("premium ad", 'div[data-testid="super-upsell-UpsellCardRenderProperties"]');
+    hideItemStyle("news", 'div[data-testid^="news_sidebar_article_"]');
   }
 
   // Get appropriate zen mode for current site
