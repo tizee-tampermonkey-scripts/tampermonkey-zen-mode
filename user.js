@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zen Mode
 // @namespace    https://github.com/tizee-tampermonkey-scripts/tampermonkey-zen-mode
-// @version      2.1.16
+// @version      2.2.0
 // @description  Hide YouTube home screen for a more zen experience
 // @icon         https://github.com/user-attachments/assets/c69e30bb-84cb-4876-8562-bc8949ede88a
 // @author       tizee
@@ -117,28 +117,107 @@
     }
   `);
 
+  // Global MutationObserver with registry pattern
+  const observerRegistry = {
+    attributeCallbacks: [], // { selector, attribute, callback }
+    childListCallbacks: [], // { descendantSelector, textContent, parentTag, handler }
+    observer: null,
+
+    init() {
+      this.observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          // Handle attribute mutations
+          if (mutation.type === "attribute" && mutation.target) {
+            for (const entry of this.attributeCallbacks) {
+              if (
+                mutation.attributeName === entry.attribute &&
+                mutation.target.matches?.(entry.selector)
+              ) {
+                entry.callback(mutation.target);
+              }
+            }
+          }
+
+          // Handle childList mutations
+          if (mutation.type === "childList") {
+            for (const node of mutation.addedNodes) {
+              if (node.nodeType !== Node.ELEMENT_NODE) continue;
+
+              for (const entry of this.childListCallbacks) {
+                const matches =
+                  node.matches?.(entry.descendantSelector) ||
+                  node.querySelector?.(entry.descendantSelector);
+
+                if (matches) {
+                  const targets = node.matches?.(entry.descendantSelector)
+                    ? [node]
+                    : node.querySelectorAll(entry.descendantSelector);
+
+                  for (const target of targets) {
+                    if (target.textContent.trim() === entry.textContent) {
+                      entry.handler(target);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+
+      this.observer.observe(document.body, {
+        attributes: true,
+        attributeOldValue: true,
+        childList: true,
+        subtree: true,
+      });
+    },
+
+    registerAttributeChange(selector, attribute, callback) {
+      this.attributeCallbacks.push({ selector, attribute, callback });
+      // Handle existing element
+      const el = document.querySelector(selector);
+      if (el) callback(el);
+    },
+
+    registerChildList(descendantSelector, textContent, parentTag) {
+      const hideParent = (descendant) => {
+        let current = descendant.parentElement;
+        while (current) {
+          if (current.tagName.toLowerCase() === parentTag) {
+            current.style.display = "none";
+            break;
+          }
+          current = current.parentElement;
+        }
+      };
+
+      this.childListCallbacks.push({
+        descendantSelector,
+        textContent,
+        parentTag,
+        handler: hideParent,
+      });
+
+      // Handle existing elements
+      const existing = document.querySelectorAll(descendantSelector);
+      for (const el of existing) {
+        if (el.textContent.trim() === textContent) {
+          hideParent(el);
+        }
+      }
+    },
+  };
+
   // Hide elements with CSS
   function hideItemStyle(tagName, selector) {
     GM_addStyle(`.zen-mode ${selector} { display: none !important; }`);
     console.debug(`${tagName} hidden in zen mode`);
   }
 
-  // Hide elements using MutationObserver
+  // Hide elements using global MutationObserver (attribute changes)
   function hideViaObserver(selector, attribute, callback) {
-    const el = document.querySelector(selector);
-    const observer = new MutationObserver(function (mutations) {
-      mutations.forEach(function (mutation) {
-        if (mutation.attributeName === attribute) {
-          observer.disconnect();
-          callback(el);
-          observer.observe(el, config);
-        }
-      });
-    });
-    const config = { attributes: true };
-    if (el) {
-      observer.observe(el, config);
-    }
+    observerRegistry.registerAttributeChange(selector, attribute, callback);
   }
 
   // Hide elements using requestAnimationFrame
@@ -161,6 +240,11 @@
         callback(el);
       }
     }, ms);
+  }
+
+  // Hide parent elements by finding descendants and traversing up (uses global observer)
+  function hideItemsByTraversingUp(descendantSelector, textContent, parentTag) {
+    observerRegistry.registerChildList(descendantSelector, textContent, parentTag);
   }
 
   // YouTube specific zen mode
@@ -208,7 +292,11 @@
     hideItemStyle("inline prompt", 'div[data-testid="inlinePrompt"]');
     hideItemStyle("premium ad", 'div[data-testid="super-upsell-UpsellCardRenderProperties"]');
     hideItemStyle("news", 'div[data-testid^="news_sidebar_article_"]');
-    hideItemStyle("ad article", 'article:has(span.css-1jxf684.r-bcqeeo.r-1ttztb7.r-qvutc0.r-poiln3)');
+    hideItemsByTraversingUp(
+      'span.css-1jxf684.r-bcqeeo.r-1ttztb7.r-qvutc0.r-poiln3',
+      "Ad",
+      "article"
+    );
   }
 
   // Get appropriate zen mode for current site
@@ -220,6 +308,9 @@
 
   const ZenMode = once(GetZenMode());
   ZenMode();
+
+  // Initialize global observer after zen mode functions register their callbacks
+  observerRegistry.init();
 
   // Create toggle button UI
   function createToggleButton() {
