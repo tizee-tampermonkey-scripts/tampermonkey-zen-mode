@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zen Mode
 // @namespace    https://github.com/tizee-tampermonkey-scripts/tampermonkey-zen-mode
-// @version      2.2.0
+// @version      2.2.3
 // @description  Hide YouTube home screen for a more zen experience
 // @icon         https://github.com/user-attachments/assets/c69e30bb-84cb-4876-8562-bc8949ede88a
 // @author       tizee
@@ -120,46 +120,19 @@
   // Global MutationObserver with registry pattern
   const observerRegistry = {
     attributeCallbacks: [], // { selector, attribute, callback }
-    childListCallbacks: [], // { descendantSelector, textContent, parentTag, handler }
     observer: null,
 
     init() {
       this.observer = new MutationObserver((mutations) => {
         for (const mutation of mutations) {
-          // Handle attribute mutations
-          if (mutation.type === "attribute" && mutation.target) {
-            for (const entry of this.attributeCallbacks) {
-              if (
-                mutation.attributeName === entry.attribute &&
-                mutation.target.matches?.(entry.selector)
-              ) {
-                entry.callback(mutation.target);
-              }
-            }
-          }
+          if (mutation.type !== "attribute" || !mutation.target) continue;
 
-          // Handle childList mutations
-          if (mutation.type === "childList") {
-            for (const node of mutation.addedNodes) {
-              if (node.nodeType !== Node.ELEMENT_NODE) continue;
-
-              for (const entry of this.childListCallbacks) {
-                const matches =
-                  node.matches?.(entry.descendantSelector) ||
-                  node.querySelector?.(entry.descendantSelector);
-
-                if (matches) {
-                  const targets = node.matches?.(entry.descendantSelector)
-                    ? [node]
-                    : node.querySelectorAll(entry.descendantSelector);
-
-                  for (const target of targets) {
-                    if (target.textContent.trim() === entry.textContent) {
-                      entry.handler(target);
-                    }
-                  }
-                }
-              }
+          for (const entry of this.attributeCallbacks) {
+            if (
+              mutation.attributeName === entry.attribute &&
+              mutation.target.matches?.(entry.selector)
+            ) {
+              entry.callback(mutation.target);
             }
           }
         }
@@ -168,7 +141,6 @@
       this.observer.observe(document.body, {
         attributes: true,
         attributeOldValue: true,
-        childList: true,
         subtree: true,
       });
     },
@@ -178,34 +150,6 @@
       // Handle existing element
       const el = document.querySelector(selector);
       if (el) callback(el);
-    },
-
-    registerChildList(descendantSelector, textContent, parentTag) {
-      const hideParent = (descendant) => {
-        let current = descendant.parentElement;
-        while (current) {
-          if (current.tagName.toLowerCase() === parentTag) {
-            current.style.display = "none";
-            break;
-          }
-          current = current.parentElement;
-        }
-      };
-
-      this.childListCallbacks.push({
-        descendantSelector,
-        textContent,
-        parentTag,
-        handler: hideParent,
-      });
-
-      // Handle existing elements
-      const existing = document.querySelectorAll(descendantSelector);
-      for (const el of existing) {
-        if (el.textContent.trim() === textContent) {
-          hideParent(el);
-        }
-      }
     },
   };
 
@@ -242,11 +186,6 @@
     }, ms);
   }
 
-  // Hide parent elements by finding descendants and traversing up (uses global observer)
-  function hideItemsByTraversingUp(descendantSelector, textContent, parentTag) {
-    observerRegistry.registerChildList(descendantSelector, textContent, parentTag);
-  }
-
   // YouTube specific zen mode
   function YtbZenMode() {
     hideItemStyle("home screen", 'ytd-browse[page-subtype="home"]');
@@ -275,28 +214,158 @@
     });
   }
 
+  // X timeline is virtualized with absolutely positioned cells. Hiding a cell
+  // does not collapse its reserved height, so shift the following cells up.
+  const X_AD_SELECTOR = 'div[class*="group-has-[[data-ad-disclosure]]"]';
+  const X_BOOSTED_SELECTOR = 'article > span svg[data-icon="icon-rocket"]';
+  let xTimelineRepairScheduled = false;
+
+  function parseXCellOffset(cell) {
+    const match = cell.style.transform.match(/translateY\((-?[\d.]+)px\)/);
+    return match ? Number.parseFloat(match[1]) : null;
+  }
+
+  function isXPromotedCell(cell) {
+    return Boolean(
+      cell.querySelector(X_AD_SELECTOR) ||
+        cell.querySelector(X_BOOSTED_SELECTOR)
+    );
+  }
+
+  function repairXTimeline() {
+    if (!location.href.includes("x.com")) return;
+    if (!document.body.classList.contains("zen-mode")) return;
+
+    const lists = new Set();
+    for (const cell of document.querySelectorAll("li[data-index]")) {
+      const list = cell.parentElement;
+      if (list?.tagName === "UL") lists.add(list);
+    }
+
+    for (const list of lists) {
+      const cells = [...list.children]
+        .filter((cell) => cell.matches?.('li[data-index]'))
+        .map((cell) => ({
+          cell,
+          index: Number(cell.dataset.index),
+          offset: parseXCellOffset(cell),
+          promoted: isXPromotedCell(cell),
+          height: 0,
+        }))
+        .filter((entry) => entry.offset !== null)
+        .sort((a, b) => a.offset - b.offset);
+
+      if (cells.length === 0) continue;
+      list.dataset.zenTimeline = "";
+
+      for (let i = 0; i < cells.length - 1; i++) {
+        const entry = cells[i];
+        const next = cells[i + 1];
+        if (entry.promoted && next.index === entry.index + 1) {
+          entry.height = Math.max(0, next.offset - entry.offset);
+        }
+      }
+
+      for (const entry of cells) {
+        const shift = cells
+          .filter(
+            (other) =>
+              other.promoted &&
+              other.index < entry.index &&
+              other.offset < entry.offset
+          )
+          .reduce((sum, other) => sum + other.height, 0);
+
+        if (!entry.promoted && shift > 0) {
+          entry.cell.style.setProperty("--zen-timeline-shift", `-${shift}px`);
+        } else {
+          entry.cell.style.removeProperty("--zen-timeline-shift");
+        }
+      }
+    }
+  }
+
+  function scheduleXTimelineRepair() {
+    if (xTimelineRepairScheduled || !location.href.includes("x.com")) return;
+    xTimelineRepairScheduled = true;
+    requestAnimationFrame(() => {
+      xTimelineRepairScheduled = false;
+      repairXTimeline();
+    });
+  }
+
+  function initXTimelineRepair() {
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (
+          mutation.target instanceof Element &&
+          mutation.target.closest("li[data-index]")
+        ) {
+          scheduleXTimelineRepair();
+          return;
+        }
+
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType !== Node.ELEMENT_NODE) continue;
+          if (
+            node.matches?.("li[data-index]") ||
+            node.querySelector?.("li[data-index]")
+          ) {
+            scheduleXTimelineRepair();
+            return;
+          }
+        }
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("scroll", scheduleXTimelineRepair, {
+      passive: true,
+      capture: true,
+    });
+    window.addEventListener("resize", scheduleXTimelineRepair);
+    scheduleXTimelineRepair();
+  }
+
   // X (Twitter) specific zen mode
   function XZenMode() {
-    hideItemStyle(
-      "live",
-      'div[aria-label="Trending"] div[data-testid="placementTracking"]'
+    GM_addStyle(
+      `.zen-mode ul[data-zen-timeline] > li[data-index] {
+        margin-top: var(--zen-timeline-shift, 0px) !important;
+      }`
     );
-    hideItemStyle(
-      "trending region",
-      'div[aria-label="Trending"]>div[role="region"]'
-    );
-    hideItemStyle("trending", 'div[aria-label="Timeline: Trending now"]');
-    hideItemStyle("ad", 'aside[role ="complementary"]');
-    hideItemStyle("explore more", 'a[href="/explore"]');
-    hideItemStyle("trending tweets", 'div[data-testid="trend" role="link"]');
+
+    // Recommendation cards in the right sidebar. The search box stays visible.
+    hideItemStyle("sidebar cards", "aside section");
+
+    // Premium entry points in the header and primary navigation
+    hideItemStyle("premium promo", 'a[href^="/i/premium_sign_up"]');
+
+    hideItemStyle("explore", 'a[href="/explore"]');
     hideItemStyle("inline prompt", 'div[data-testid="inlinePrompt"]');
-    hideItemStyle("premium ad", 'div[data-testid="super-upsell-UpsellCardRenderProperties"]');
-    hideItemStyle("news", 'div[data-testid^="news_sidebar_article_"]');
-    hideItemsByTraversingUp(
-      'span.css-1jxf684.r-bcqeeo.r-1ttztb7.r-qvutc0.r-poiln3',
-      "Ad",
-      "article"
+    hideItemStyle(
+      "premium ad",
+      'div[data-testid="super-upsell-UpsellCardRenderProperties"]'
     );
+
+    // Promoted posts carry an "Ad" disclosure wrapper. Match the wrapper, not
+    // the text, so recycled timeline cells unhide automatically.
+    hideItemStyle(
+      "promoted post",
+      ':is(li, article):has(div[class*="group-has-[[data-ad-disclosure]]"])'
+    );
+
+    // Boosted posts use a rocket icon in the article pre-header
+    hideItemStyle(
+      "boosted post",
+      'li:has(article > span svg[data-icon="icon-rocket"])'
+    );
+    hideItemStyle(
+      "boosted post",
+      'article:has(> span svg[data-icon="icon-rocket"])'
+    );
+
+    initXTimelineRepair();
   }
 
   // Get appropriate zen mode for current site
@@ -351,6 +420,7 @@
     if (container.dataset.enabled === "true") {
       document.body.classList.add("zen-mode");
       container.classList.add("active");
+      repairXTimeline();
     }
 
     // Toggle functionality
@@ -360,6 +430,7 @@
       container.dataset.enabled = newState;
       // Save new state to localStorage
       localStorage.setItem("zen-mode", newState);
+      if (newState) repairXTimeline();
     });
 
     // Dragging functionality
