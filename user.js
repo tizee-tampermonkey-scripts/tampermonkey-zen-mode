@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zen Mode
 // @namespace    https://github.com/tizee-tampermonkey-scripts/tampermonkey-zen-mode
-// @version      2.2.3
+// @version      2.2.4
 // @description  Hide YouTube home screen for a more zen experience
 // @icon         https://github.com/user-attachments/assets/c69e30bb-84cb-4876-8562-bc8949ede88a
 // @author       tizee
@@ -216,20 +216,91 @@
 
   // X timeline is virtualized with absolutely positioned cells. Hiding a cell
   // does not collapse its reserved height, so shift the following cells up.
-  const X_AD_SELECTOR = 'div[class*="group-has-[[data-ad-disclosure]]"]';
-  const X_BOOSTED_SELECTOR = 'article > span svg[data-icon="icon-rocket"]';
+  // The old layout uses div[data-testid="cellInnerDiv"], the new layout uses
+  // li[data-index]. Support both.
+  const X_CELL_SELECTOR =
+    'li[data-index], div[data-testid="cellInnerDiv"]';
+  const X_AD_SELECTOR = [
+    'div[class*="group-has-[[data-ad-disclosure]]"]',
+    "[data-ad-disclosure]",
+    'div[data-testid="placementTracking"] > article',
+    '[data-testid="top-impression-pixel"]',
+  ].join(", ");
+  const X_BOOSTED_SELECTOR =
+    'article > span svg[data-icon="icon-rocket"], article > div > span svg[data-icon="icon-rocket"]';
+  const X_PROMOTED_LABELS = new Set([
+    "ad",
+    "广告",
+    "promoted",
+    "推广",
+    "sponsored",
+    "赞助",
+    "anzeige",
+    "gesponsert",
+    "publicité",
+    "sponsorisé",
+    "anuncio",
+    "promocionado",
+    "annuncio",
+    "promosso",
+  ]);
   let xTimelineRepairScheduled = false;
+  const xPromotedLabelCache = new WeakMap();
 
   function parseXCellOffset(cell) {
     const match = cell.style.transform.match(/translateY\((-?[\d.]+)px\)/);
     return match ? Number.parseFloat(match[1]) : null;
   }
 
+  // Old layout has no ad disclosure wrapper. Its label is plain text inside
+  // the tweet header, so match exact label text and ignore tweet content.
+  function hasXPromotedLabel(cell) {
+    const article = cell.querySelector("article");
+    if (!article) return false;
+
+    const tweetText = article.querySelector('[data-testid="tweetText"]');
+
+    for (const el of article.querySelectorAll("span")) {
+      if (el.children.length > 0) continue;
+      if (!X_PROMOTED_LABELS.has(el.textContent.trim().toLowerCase())) {
+        continue;
+      }
+      if (
+        el.closest(
+          '[data-testid="tweetText"], [data-testid="User-Name"], [data-testid^="card."]'
+        )
+      ) {
+        continue;
+      }
+      if (
+        tweetText &&
+        !(
+          el.compareDocumentPosition(tweetText) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+        )
+      ) {
+        continue;
+      }
+      return true;
+    }
+
+    return false;
+  }
+
   function isXPromotedCell(cell) {
-    return Boolean(
+    if (
+      cell.matches(X_AD_SELECTOR) ||
       cell.querySelector(X_AD_SELECTOR) ||
-        cell.querySelector(X_BOOSTED_SELECTOR)
-    );
+      cell.querySelector(X_BOOSTED_SELECTOR)
+    ) {
+      return true;
+    }
+
+    if (!xPromotedLabelCache.has(cell)) {
+      xPromotedLabelCache.set(cell, hasXPromotedLabel(cell));
+    }
+
+    return xPromotedLabelCache.get(cell);
   }
 
   function repairXTimeline() {
@@ -237,17 +308,15 @@
     if (!document.body.classList.contains("zen-mode")) return;
 
     const lists = new Set();
-    for (const cell of document.querySelectorAll("li[data-index]")) {
-      const list = cell.parentElement;
-      if (list?.tagName === "UL") lists.add(list);
+    for (const cell of document.querySelectorAll(X_CELL_SELECTOR)) {
+      if (cell.parentElement) lists.add(cell.parentElement);
     }
 
     for (const list of lists) {
       const cells = [...list.children]
-        .filter((cell) => cell.matches?.('li[data-index]'))
+        .filter((cell) => cell.matches?.(X_CELL_SELECTOR))
         .map((cell) => ({
           cell,
-          index: Number(cell.dataset.index),
           offset: parseXCellOffset(cell),
           promoted: isXPromotedCell(cell),
           height: 0,
@@ -258,29 +327,26 @@
       if (cells.length === 0) continue;
       list.dataset.zenTimeline = "";
 
+      for (const entry of cells) {
+        entry.cell.toggleAttribute("data-zen-promoted", entry.promoted);
+      }
+
       for (let i = 0; i < cells.length - 1; i++) {
-        const entry = cells[i];
-        const next = cells[i + 1];
-        if (entry.promoted && next.index === entry.index + 1) {
-          entry.height = Math.max(0, next.offset - entry.offset);
+        if (cells[i].promoted) {
+          cells[i].height = Math.max(0, cells[i + 1].offset - cells[i].offset);
         }
       }
 
+      let shift = 0;
       for (const entry of cells) {
-        const shift = cells
-          .filter(
-            (other) =>
-              other.promoted &&
-              other.index < entry.index &&
-              other.offset < entry.offset
-          )
-          .reduce((sum, other) => sum + other.height, 0);
-
         if (!entry.promoted && shift > 0) {
           entry.cell.style.setProperty("--zen-timeline-shift", `-${shift}px`);
+          entry.cell.dataset.zenShift = "";
         } else {
           entry.cell.style.removeProperty("--zen-timeline-shift");
+          delete entry.cell.dataset.zenShift;
         }
+        if (entry.promoted) shift += entry.height;
       }
     }
   }
@@ -296,29 +362,40 @@
 
   function initXTimelineRepair() {
     const observer = new MutationObserver((mutations) => {
+      let needsRepair = false;
+
       for (const mutation of mutations) {
-        if (
-          mutation.target instanceof Element &&
-          mutation.target.closest("li[data-index]")
-        ) {
-          scheduleXTimelineRepair();
-          return;
+        const target =
+          mutation.target instanceof Element
+            ? mutation.target
+            : mutation.target.parentElement;
+
+        const cell = target?.closest(X_CELL_SELECTOR);
+        if (cell) {
+          xPromotedLabelCache.delete(cell);
+          needsRepair = true;
         }
 
         for (const node of mutation.addedNodes) {
           if (node.nodeType !== Node.ELEMENT_NODE) continue;
           if (
-            node.matches?.("li[data-index]") ||
-            node.querySelector?.("li[data-index]")
+            node.matches?.(X_CELL_SELECTOR) ||
+            node.querySelector?.(X_CELL_SELECTOR)
           ) {
-            scheduleXTimelineRepair();
-            return;
+            needsRepair = true;
+            break;
           }
         }
       }
+
+      if (needsRepair) scheduleXTimelineRepair();
     });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
     window.addEventListener("scroll", scheduleXTimelineRepair, {
       passive: true,
       capture: true,
@@ -329,14 +406,26 @@
 
   // X (Twitter) specific zen mode
   function XZenMode() {
-    GM_addStyle(
-      `.zen-mode ul[data-zen-timeline] > li[data-index] {
-        margin-top: var(--zen-timeline-shift, 0px) !important;
-      }`
-    );
+    GM_addStyle(`
+      .zen-mode [data-zen-timeline] > :is(${X_CELL_SELECTOR})[data-zen-shift] {
+        margin-top: var(--zen-timeline-shift) !important;
+      }
+      .zen-mode [data-zen-promoted] {
+        display: none !important;
+      }
+    `);
 
     // Recommendation cards in the right sidebar. The search box stays visible.
     hideItemStyle("sidebar cards", "aside section");
+
+    // Old layout keeps trending and news in plain divs instead of sections.
+    hideItemStyle(
+      "trending timeline",
+      'aside div[aria-label="Timeline: Trending now"]'
+    );
+    hideItemStyle("trending region", 'aside div[aria-label="Trending"]');
+    hideItemStyle("trending topics", 'aside div[data-testid="trend"]');
+    hideItemStyle("news", 'aside div[data-testid^="news_sidebar_article_"]');
 
     // Premium entry points in the header and primary navigation
     hideItemStyle("premium promo", 'a[href^="/i/premium_sign_up"]');
@@ -346,23 +435,6 @@
     hideItemStyle(
       "premium ad",
       'div[data-testid="super-upsell-UpsellCardRenderProperties"]'
-    );
-
-    // Promoted posts carry an "Ad" disclosure wrapper. Match the wrapper, not
-    // the text, so recycled timeline cells unhide automatically.
-    hideItemStyle(
-      "promoted post",
-      ':is(li, article):has(div[class*="group-has-[[data-ad-disclosure]]"])'
-    );
-
-    // Boosted posts use a rocket icon in the article pre-header
-    hideItemStyle(
-      "boosted post",
-      'li:has(article > span svg[data-icon="icon-rocket"])'
-    );
-    hideItemStyle(
-      "boosted post",
-      'article:has(> span svg[data-icon="icon-rocket"])'
     );
 
     initXTimelineRepair();
