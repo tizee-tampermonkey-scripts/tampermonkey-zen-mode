@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zen Mode
 // @namespace    https://github.com/tizee-tampermonkey-scripts/tampermonkey-zen-mode
-// @version      2.2.4
+// @version      2.2.5
 // @description  Hide YouTube home screen for a more zen experience
 // @icon         https://github.com/user-attachments/assets/c69e30bb-84cb-4876-8562-bc8949ede88a
 // @author       tizee
@@ -416,16 +416,21 @@
     `);
 
     // Recommendation cards in the right sidebar. The search box stays visible.
-    hideItemStyle("sidebar cards", "aside section");
+    // New layout nests cards in aside/section; the legacy layout uses aside
+    // cards directly under sidebarColumn.
+    hideItemStyle("sidebar cards", '[data-testid="sidebarColumn"] aside');
+    hideItemStyle(
+      "trending card",
+      '[data-testid="sidebarColumn"] section[aria-labelledby^="accessible-list-"]'
+    );
 
-    // Old layout keeps trending and news in plain divs instead of sections.
+    // Legacy layout keeps trending and news in plain divs, not inside aside.
     hideItemStyle(
       "trending timeline",
-      'aside div[aria-label="Timeline: Trending now"]'
+      'div[aria-label="Timeline: Trending now"]'
     );
-    hideItemStyle("trending region", 'aside div[aria-label="Trending"]');
-    hideItemStyle("trending topics", 'aside div[data-testid="trend"]');
-    hideItemStyle("news", 'aside div[data-testid^="news_sidebar_article_"]');
+    hideItemStyle("trending topics", 'div[data-testid="trend"]');
+    hideItemStyle("news", 'div[data-testid^="news_sidebar_article_"]');
 
     // Premium entry points in the header and primary navigation
     hideItemStyle("premium promo", 'a[href^="/i/premium_sign_up"]');
