@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zen Mode
 // @namespace    https://github.com/tizee-tampermonkey-scripts/tampermonkey-zen-mode
-// @version      2.2.5
+// @version      2.2.6
 // @description  Hide YouTube home screen for a more zen experience
 // @icon         https://github.com/user-attachments/assets/c69e30bb-84cb-4876-8562-bc8949ede88a
 // @author       tizee
@@ -216,8 +216,8 @@
 
   // X timeline is virtualized with absolutely positioned cells. Hiding a cell
   // does not collapse its reserved height, so shift the following cells up.
-  // The old layout uses div[data-testid="cellInnerDiv"], the new layout uses
-  // li[data-index]. Support both.
+  // X serves both div[data-testid="cellInnerDiv"] and li[data-index] cells.
+  // Support both.
   const X_CELL_SELECTOR =
     'li[data-index], div[data-testid="cellInnerDiv"]';
   const X_AD_SELECTOR = [
@@ -230,9 +230,11 @@
     'article > span svg[data-icon="icon-rocket"], article > div > span svg[data-icon="icon-rocket"]';
   const X_PROMOTED_LABELS = new Set([
     "ad",
+    "boosted",
     "广告",
     "promoted",
     "推广",
+    "已推广",
     "sponsored",
     "赞助",
     "anzeige",
@@ -252,8 +254,8 @@
     return match ? Number.parseFloat(match[1]) : null;
   }
 
-  // Old layout has no ad disclosure wrapper. Its label is plain text inside
-  // the tweet header, so match exact label text and ignore tweet content.
+  // Some X layouts have no ad disclosure wrapper. The label is plain text
+  // inside the tweet header, so match exact label text and ignore tweet content.
   function hasXPromotedLabel(cell) {
     const article = cell.querySelector("article");
     if (!article) return false;
@@ -320,25 +322,32 @@
           offset: parseXCellOffset(cell),
           promoted: isXPromotedCell(cell),
           height: 0,
-        }))
-        .filter((entry) => entry.offset !== null)
-        .sort((a, b) => a.offset - b.offset);
+        }));
 
       if (cells.length === 0) continue;
       list.dataset.zenTimeline = "";
 
+      // Hiding must not depend on the virtualizer. X can add cells before it
+      // sets their transform, and offsets are only needed for the shift.
       for (const entry of cells) {
         entry.cell.toggleAttribute("data-zen-promoted", entry.promoted);
       }
 
-      for (let i = 0; i < cells.length - 1; i++) {
-        if (cells[i].promoted) {
-          cells[i].height = Math.max(0, cells[i + 1].offset - cells[i].offset);
+      const positioned = cells
+        .filter((entry) => entry.offset !== null)
+        .sort((a, b) => a.offset - b.offset);
+
+      for (let i = 0; i < positioned.length - 1; i++) {
+        if (positioned[i].promoted) {
+          positioned[i].height = Math.max(
+            0,
+            positioned[i + 1].offset - positioned[i].offset
+          );
         }
       }
 
       let shift = 0;
-      for (const entry of cells) {
+      for (const entry of positioned) {
         if (!entry.promoted && shift > 0) {
           entry.cell.style.setProperty("--zen-timeline-shift", `-${shift}px`);
           entry.cell.dataset.zenShift = "";
@@ -365,6 +374,11 @@
       let needsRepair = false;
 
       for (const mutation of mutations) {
+        if (mutation.type === "attributes") {
+          if (mutation.target.closest?.(X_CELL_SELECTOR)) needsRepair = true;
+          continue;
+        }
+
         const target =
           mutation.target instanceof Element
             ? mutation.target
@@ -394,6 +408,8 @@
     observer.observe(document.body, {
       childList: true,
       characterData: true,
+      attributes: true,
+      attributeFilter: ["style"],
       subtree: true,
     });
     window.addEventListener("scroll", scheduleXTimelineRepair, {
